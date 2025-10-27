@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Ulang tahun Shara ke-21 – dibuat dengan cinta oleh Naufal" />
+  <title>Selamat Ulang Tahun ke-21, Shara 🎂</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Confetti Canvas (overlay) -->
+    <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
+
+    <header class="site-header" role="banner">
+      <div class="container header-inner">
+  <h1 class="logo" aria-label="Selamat Ulang Tahun ke-21 untuk Shara">🎉 Shara Day</h1>
+        <div class="header-actions">
+          <button id="themeToggle" class="btn ghost" aria-label="Toggle tema terang/gelap">🌗 Tema</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="app" role="main">
+      <!-- LOGIN -->
+      <section id="loginSection" class="login-wrapper">
+        <div class="container">
+          <div class="card login">
+            <h2 id="loginTitle">Masuk</h2>
+            <p class="muted">Masukkin tanggal lahir nya dulu ya sayangg 🫶</p>
+            <form id="loginForm" aria-label="Form Login" autocomplete="off">
+              <div class="form-row">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" placeholder="shara" required aria-required="true" />
+              </div>
+              <div class="form-row">
+                <label for="password">Password (Tanggal Lahir)</label>
+                <input id="password" name="password" type="text" placeholder="DD-MM-YYYY (contoh: 28-10-2004)" pattern="\d{2}-\d{2}-\d{4}" required aria-required="true" />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn primary" aria-label="Masuk">Masuk</button>
+              </div>
+              <p id="loginError" class="error" role="alert" aria-live="polite" hidden>Hmm, coba lagi ya 🫶</p>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- DASHBOARD (hidden before login) -->
+      <div id="dashboard" class="hidden" aria-live="polite">
+        <div class="container">
+          <!-- PAGE 1: MAIN CONTENT -->
+          <div id="page1" class="page active">
+            <!-- HERO -->
+            <section id="hero" class="hero card" aria-labelledby="heroTitle">
+              <div class="hero-content">
+                <h2 id="heroTitle">Selamat Ulang Tahun yang ke-21, Shara!</h2>
+                <p class="sub">Semoga harimu selalu dipenuhi tawa, pelukan hangat, dan cinta yang tak berujung. Kamu selalu jadi rumah buat hatiku. 💖</p>
+                <div class="hero-actions">
+                  <button id="playPauseBtn" class="btn primary" aria-pressed="false" aria-label="Putar musik">▶️ Putar Musik</button>
+                  <button id="celebrateBtn" class="btn" aria-label="Rayakan dengan confetti">🎊 Rayakan!</button>
+                </div>
+                <div class="audio-controls" aria-label="Kontrol musik">
+                  <div class="time" id="audioTime">00:00 / 00:00</div>
+                  <label class="visually-hidden" for="volume">Volume</label>
+                  <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Atur volume" />
+                </div>
+              </div>
+            </section>
+
+            <!-- COUNTDOWN -->
+            <section id="countdown" class="card" aria-labelledby="countdownTitle">
+              <h3 id="countdownTitle">Hitung Mundur ke Ulang Tahun ke-21, 28 Oktober 2025 (WIB)</h3>
+              <div class="countdown-grid" role="timer" aria-live="polite">
+                <div class="time-box"><span id="dd">00</span><small>Hari</small></div>
+                <div class="time-box"><span id="hh">00</span><small>Jam</small></div>
+                <div class="time-box"><span id="mm">00</span><small>Menit</small></div>
+                <div class="time-box"><span id="ss">00</span><small>Detik</small></div>
+              </div>
+              <p id="birthdayNote" class="center muted"></p>
+            </section>
+
+            <!-- NAVIGATION TO GALLERY -->
+            <div class="page-nav">
+              <button id="goToGallery" class="btn primary large">� Lihat Galeri Foto →</button>
+            </div>
+          </div>
+
+          <!-- PAGE 2: GALLERY -->
+          <div id="page2" class="page">
+            <div class="page-header">
+              <button id="backToMain" class="btn ghost">← Kembali</button>
+              <h2>Galeri Kenangan Kita 💕</h2>
+            </div>
+
+            <!-- GALLERY -->
+            <section id="gallery" class="card" aria-labelledby="galleryTitle">
+              <div class="section-head">
+                <h3 id="galleryTitle">Momen Spesial Kytaa</h3>
+                <p id="galleryTitle">Di bukaa semuaa foto nya yaa sayangg</p>
+              </div>
+              <div class="grid photos" id="photoGrid" role="list" aria-label="Galeri foto Shara"></div>
+            </section>
+          </div>
+
+          <!-- PAGE 3: LOVE LETTER (unlocked after all photos revealed) -->
+          <div id="page3" class="page">
+            <div class="page-header">
+              <button id="backFromLetter" class="btn ghost">← Kembali ke Galeri</button>
+              <h2>💌 Love Letter</h2>
+            </div>
+
+            <!-- LOVE LETTER -->
+            <section id="loveLetter" class="card" aria-labelledby="loveTitle">
+              <h3 id="loveTitle">Surat Cinta Untukmu 💕</h3>
+              <div class="letter">
+                <p id="typewriter" aria-live="polite"></p>
+                <div class="letter-actions">
+                  <button id="restartLetter" class="btn ghost" aria-label="Ulangi animasi surat">🔁 Ulangi</button>
+                  <button id="replyWhatsApp" class="btn primary hidden" aria-label="Balas lewat WhatsApp">💬 Balas di WhatsApp</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <footer class="site-footer" role="contentinfo">
+            <p>Made with ❤️ by Naufal for Shara</p>
+          </footer>
+        </div>
+
+        <!-- Modal lightbox tidak digunakan lagi - foto reveal di card langsung -->
+      </div>
+    </main>
+
+    <!-- Hidden audio element -->
+    <audio id="bgm" preload="metadata">
+      <source src="assets/audio/backsound.mp3" type="audio/mpeg" />
+    </audio>
+
+    <script src="script.js"></script>
+  </body>
+</html>
