@@ -212,7 +212,7 @@
 		cancelAnimationFrame(rafId);
 	});
 
-	// ---------- Countdown (to 28 Oct 00:00 WIB) ----------
+	// ---------- Countup (since 28 Oct 00:00 WIB) ----------
 	// WIB = UTC+7, Jakarta no DST
 	function nowWIBms() {
 		const now = new Date();
@@ -220,15 +220,12 @@
 		return utcMs + 7 * 3600000; // WIB
 	}
 
-	function getNextBirthdayWIBms() {
-		const nowMs = nowWIBms();
-		const nowWIB = new Date(nowMs);
+	function getThisBirthdayWIBms() {
+		const nowWIB = new Date(nowWIBms());
 		const year = nowWIB.getFullYear();
 		// 28 Oct 00:00 WIB is 27 Oct 17:00 UTC
-		const targetThisYearUTC = Date.UTC(year, 9, 27, 17, 0, 0, 0);
-		const targetNextYearUTC = Date.UTC(year + 1, 9, 27, 17, 0, 0, 0);
-		const target = nowMs <= targetThisYearUTC + 7 * 3600000 ? targetThisYearUTC : targetNextYearUTC;
-		return target; // UTC ms of target moment
+		const birthdayThisYearUTC = Date.UTC(year, 9, 27, 17, 0, 0, 0);
+		return birthdayThisYearUTC; // UTC ms of birthday this year
 	}
 
 	function isTodayBirthdayWIB() {
@@ -239,14 +236,15 @@
 
 	function updateCountdown() {
 		if (isTodayBirthdayWIB()) {
-			birthdayNote.textContent = 'Hari ini harimu! Selamat ulang tahun, cintaku 💝';
+			birthdayNote.textContent = 'Hari ini harimu! Selamat ulang tahun ke-21, cintaku 💝';
 		} else {
 			birthdayNote.textContent = '';
 		}
 
 		const nowMs = Date.now(); // compare in UTC epoch
-		const targetUTC = getNextBirthdayWIBms();
-		let diff = Math.max(0, targetUTC - nowMs);
+		const birthdayUTC = getThisBirthdayWIBms();
+		// Hitung berapa lama SEJAK ulang tahun (countup, bukan countdown)
+		let diff = Math.max(0, nowMs - birthdayUTC);
 		const d = Math.floor(diff / 86400000); diff -= d * 86400000;
 		const h = Math.floor(diff / 3600000); diff -= h * 3600000;
 		const m = Math.floor(diff / 60000); diff -= m * 60000;
@@ -288,6 +286,9 @@
 
 	// Track revealed photos for love letter unlock
 	let revealedPhotosCount = 0;
+	
+	// Performance optimization: track loaded images
+	let loadedImagesCount = 0;
 
 	// Swipe functionality
 	let touchStartX = 0;
@@ -306,25 +307,36 @@
 			const wrapper = document.createElement('div');
 			wrapper.classList.add('photo-wrapper');
 			
-			// Image
+			// Image - HIDDEN by default, akan dimuat saat dibuka
 			const img = document.createElement('img');
-			img.src = p.src;
+			img.dataset.src = p.src; // Simpan URL di data attribute
 			img.alt = `Foto ${idx + 1} dari Shara`;
 			img.loading = 'lazy';
+			img.style.opacity = '0'; // Hidden sampai revealed
+			img.style.transition = 'opacity 0.5s ease';
+			
 			img.onerror = () => { img.src = placeholderDataURI('Foto'); };
 			
-			// Scratch canvas overlay
+			// Scratch canvas overlay - ini yang terlihat
 			const canvas = document.createElement('canvas');
 			canvas.classList.add('scratch-card-overlay');
 			canvas.dataset.index = idx;
 			
-			// Click to reveal with animation
-			fig.addEventListener('click', () => revealPhoto(fig, canvas, idx));
+			// Optimized click handler with debounce
+			let isRevealing = false;
+			const revealHandler = () => {
+				if (!isRevealing) {
+					isRevealing = true;
+					revealPhoto(fig, canvas, idx);
+				}
+			};
+			
+			fig.addEventListener('click', revealHandler, { passive: true });
 			fig.tabIndex = 0;
 			fig.addEventListener('keydown', (e) => { 
 				if (e.key === 'Enter' || e.key === ' ') { 
 					e.preventDefault(); 
-					revealPhoto(fig, canvas, idx);
+					revealHandler();
 				} 
 			});
 			
@@ -334,123 +346,167 @@
 			fig.appendChild(wrapper);
 			frag.appendChild(fig);
 			
-			// Initialize scratch overlay after image loads
-			img.onload = () => {
-				// Small delay to ensure proper dimensions
-				setTimeout(() => initCardScratch(canvas, img), 50);
+			// Initialize canvas overlay IMMEDIATELY (tanpa load gambar dulu)
+			// Canvas size menggunakan aspect ratio 1:1
+			const initCanvas = () => {
+				const rect = wrapper.getBoundingClientRect();
+				if (rect.width > 0) {
+					initCardScratchNoImage(canvas, rect.width, rect.width);
+				} else {
+					// Retry if dimensions not ready
+					setTimeout(initCanvas, 50);
+				}
 			};
 			
-			// Also initialize immediately in case image is cached
-			if (img.complete) {
-				initCardScratch(canvas, img);
+			// Initialize canvas saat card masuk viewport
+			if ('IntersectionObserver' in window) {
+				const observer = new IntersectionObserver((entries) => {
+					entries.forEach(entry => {
+						if (entry.isIntersecting) {
+							initCanvas();
+							observer.unobserve(entry.target);
+						}
+					});
+				}, { rootMargin: '50px' });
+				observer.observe(fig);
+			} else {
+				// Fallback for older browsers
+				initCanvas();
 			}
 		});
 		photoGrid.appendChild(frag);
 		if (totalPhotosEl) totalPhotosEl.textContent = photos.length;
 	}
 
-	// ---------- Scratch Card Effect (Auto Animation) ----------
-	function initCardScratch(canvas, img) {
-		// Force reflow to get accurate dimensions
-		const rect = img.getBoundingClientRect();
+	// ---------- Scratch Card Overlay (Tanpa Load Gambar) - SUPER FAST ----------
+	function initCardScratchNoImage(canvas, width, height) {
+		// Use lower resolution for better performance
+		const scale = window.devicePixelRatio > 1 ? 1.5 : 1;
+		canvas.width = width * scale;
+		canvas.height = height * scale;
+		canvas.style.width = width + 'px';
+		canvas.style.height = height + 'px';
 		
-		// Skip if dimensions are invalid
-		if (rect.width === 0 || rect.height === 0) {
-			console.warn('Invalid dimensions, retrying...');
-			setTimeout(() => initCardScratch(canvas, img), 100);
-			return;
-		}
+		const ctx = canvas.getContext('2d', { 
+			alpha: true,
+			desynchronized: true
+		});
 		
-		canvas.width = rect.width;
-		canvas.height = rect.height;
+		// Scale context
+		ctx.scale(scale, scale);
 		
-		const ctx = canvas.getContext('2d');
-		
-		// Create more vibrant gradient overlay
-		const gradient = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+		// Create gradient overlay
+		const gradient = ctx.createLinearGradient(0, 0, width, height);
 		gradient.addColorStop(0, '#ff9ecd');
 		gradient.addColorStop(0.3, '#ffc1e0');
 		gradient.addColorStop(0.6, '#e6b3ff');
 		gradient.addColorStop(1, '#d4a5ff');
 		
 		ctx.fillStyle = gradient;
-		ctx.fillRect(0, 0, rect.width, rect.height);
+		ctx.fillRect(0, 0, width, height);
 		
-		// Add decorative border
-		ctx.strokeStyle = '#ff69b4';
-		ctx.lineWidth = 3;
-		ctx.strokeRect(2, 2, rect.width - 4, rect.height - 4);
+		// Add decorative elements
+		const baseFontSize = Math.min(width / 8, 32);
+		const smallFontSize = Math.min(width / 12, 16);
 		
-		// Responsive font sizes based on canvas width
-		const baseFontSize = Math.min(rect.width / 8, 32);
-		const smallFontSize = Math.min(rect.width / 12, 16);
-		const emojiSize = Math.min(rect.width / 10, 20);
-		
-		// Add sparkles around (adjusted for small cards)
-		if (rect.width > 120) {
+		// Add sparkles
+		if (width > 120) {
 			ctx.fillStyle = '#fff';
 			ctx.font = `${smallFontSize}px Arial`;
 			const sparkles = ['✨', '⭐', '💫', '✨'];
 			sparkles.forEach((spark, i) => {
-				const x = (rect.width / 5) * (i + 0.5);
+				const x = (width / 5) * (i + 0.5);
 				const y = smallFontSize + 5;
 				ctx.fillText(spark, x, y);
-				ctx.fillText(spark, x, rect.height - 8);
+				ctx.fillText(spark, x, height - 8);
 			});
 		}
 		
-		// Add "Foto" text label with responsive styling
+		// Add text
 		ctx.fillStyle = '#ff1493';
 		ctx.font = `bold ${baseFontSize}px Poppins, Arial`;
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
 		ctx.shadowBlur = 8;
-		ctx.fillText('🎁 Foto 🎁', rect.width / 2, rect.height / 2 - baseFontSize / 4);
+		ctx.fillText('🎁 Foto 🎁', width / 2, height / 2 - baseFontSize / 4);
 		
-		// Only add subtitle if card is big enough
-		if (rect.width > 140) {
+		if (width > 140) {
 			ctx.shadowBlur = 0;
 			ctx.font = `${smallFontSize}px Poppins, Arial`;
 			ctx.fillStyle = '#c0568b';
-			ctx.fillText('Klik buka!', rect.width / 2, rect.height / 2 + baseFontSize / 2);
+			ctx.fillText('Klik buka!', width / 2, height / 2 + baseFontSize / 2);
 			
-			// Add sparkle emoji
+			const emojiSize = Math.min(width / 10, 20);
 			ctx.font = `${emojiSize}px Arial`;
-			ctx.fillText('✨💕✨', rect.width / 2, rect.height / 2 + baseFontSize);
+			ctx.fillText('✨💕✨', width / 2, height / 2 + baseFontSize);
 		}
 	}
 
+	// ---------- OLD function kept for compatibility ----------
+	function initCardScratch(canvas, img) {
+		const rect = img.getBoundingClientRect();
+		if (rect.width === 0 || rect.height === 0) {
+			setTimeout(() => initCardScratch(canvas, img), 100);
+			return;
+		}
+		initCardScratchNoImage(canvas, rect.width, rect.height);
+	}
+
+	// ---------- Reveal Photo (Load image saat dibuka) ----------
 	function revealPhoto(figElement, canvas, photoIndex) {
 		// Prevent multiple clicks
 		if (figElement.dataset.revealed === 'true') return;
 		figElement.dataset.revealed = 'true';
 		
-		// Add shake animation to card
+		const wrapper = figElement.querySelector('.photo-wrapper');
+		const img = wrapper.querySelector('img');
+		
+		// Load image NOW (saat dibuka) - fade in effect
+		if (!img.src || img.src === '') {
+			img.src = img.dataset.src;
+		}
+		
+		// Ensure image is visible after load
+		img.onload = () => {
+			img.style.opacity = '1';
+		};
+		
+		// If already loaded/cached
+		if (img.complete && img.naturalWidth > 0) {
+			img.style.opacity = '1';
+		}
+		
+		// Add shake animation
 		figElement.classList.add('shake-reveal');
 		
-		const ctx = canvas.getContext('2d');
-		const width = canvas.width;
-		const height = canvas.height;
-		const wrapper = figElement.querySelector('.photo-wrapper');
+		const ctx = canvas.getContext('2d', { alpha: true });
+		const scale = window.devicePixelRatio > 1 ? 1.5 : 1;
+		const width = canvas.width / scale;
+		const height = canvas.height / scale;
 		
-		// Create particle explosion
-		createParticleExplosion(wrapper, width / 2, height / 2);
+		// Reduce particle count on mobile for better performance
+		const isMobile = window.innerWidth < 640;
+		
+		// Create particle explosion (optimized)
+		if (!isMobile) {
+			createParticleExplosion(wrapper, width / 2, height / 2);
+		}
 		
 		// Set composite operation for erasing
 		ctx.globalCompositeOperation = 'destination-out';
 		
-		// Animate scratch reveal with fun patterns
+		// Animate scratch reveal with optimized patterns
 		let progress = 0;
-		const duration = 1200; // 1.2 seconds
+		const duration = isMobile ? 800 : 1200; // Faster on mobile
 		const startTime = performance.now();
+		const scratchCount = isMobile ? 8 : 12; // Less particles on mobile
 		
 		function animateScratch(currentTime) {
 			const elapsed = currentTime - startTime;
 			progress = Math.min(elapsed / duration, 1);
 			
 			// Create circular scratch pattern (like unwrapping)
-			const scratchCount = 12;
 			const angle = progress * Math.PI * 4; // Multiple rotations
 			
 			for (let i = 0; i < scratchCount; i++) {
@@ -458,7 +514,7 @@
 				const spiralRadius = progress * Math.max(width, height) * 0.7;
 				const x = (width / 2) + Math.cos(spreadAngle + angle) * spiralRadius;
 				const y = (height / 2) + Math.sin(spreadAngle + angle) * spiralRadius;
-				const radius = 25 + Math.random() * 20;
+				const radius = isMobile ? 20 : 25 + Math.random() * 20;
 				
 				ctx.beginPath();
 				ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -470,7 +526,7 @@
 				requestAnimationFrame(animateScratch);
 			} else {
 				// Completely clear canvas
-				ctx.clearRect(0, 0, width, height);
+				ctx.clearRect(0, 0, width * scale, height * scale);
 				canvas.style.opacity = '0';
 				
 				setTimeout(() => {
@@ -497,7 +553,11 @@
 
 	function createParticleExplosion(container, centerX, centerY) {
 		const particles = ['✨', '⭐', '💫', '🌟', '💕', '💖', '🎉'];
-		const particleCount = 15;
+		const isMobile = window.innerWidth < 640;
+		const particleCount = isMobile ? 8 : 15; // Reduce on mobile
+		
+		// Use DocumentFragment for better performance
+		const frag = document.createDocumentFragment();
 		
 		for (let i = 0; i < particleCount; i++) {
 			const particle = document.createElement('div');
@@ -505,7 +565,7 @@
 			particle.textContent = particles[Math.floor(Math.random() * particles.length)];
 			
 			const angle = (i / particleCount) * Math.PI * 2;
-			const distance = 80 + Math.random() * 40;
+			const distance = isMobile ? 60 : 80 + Math.random() * 40;
 			const endX = Math.cos(angle) * distance;
 			const endY = Math.sin(angle) * distance;
 			
@@ -515,10 +575,15 @@
 			particle.style.top = '50%';
 			particle.style.animationDelay = `${Math.random() * 0.1}s`;
 			
-			container.appendChild(particle);
-			
-			setTimeout(() => particle.remove(), 800);
+			frag.appendChild(particle);
 		}
+		
+		container.appendChild(frag);
+		
+		// Clean up all particles at once
+		setTimeout(() => {
+			container.querySelectorAll('.particle-burst').forEach(p => p.remove());
+		}, 800);
 	}
 
 	// Check if all photos revealed and unlock love letter
